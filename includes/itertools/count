@@ -1,0 +1,37 @@
+#include <ranges>
+#include <cstdint>
+#include <limits>
+#include <concepts>
+
+namespace util{
+namespace itertools {
+template<std::integral Integer>
+struct sequential_integral_range_helper {
+    Integer value;
+    Integer step;
+    bool wrapped{true};
+    Integer operator*() { return value; }
+    bool operator!=(const sequential_integral_range_helper& rhs) 
+    {
+        bool result = wrapped && value <= rhs.value;
+        if(std::numeric_limits<Integer>::max() - step < value) wrapped = false;
+        return result;
+    }
+    auto operator++() { value += step; return *this; }
+};
+
+template<std::integral Integer = std::uint64_t>
+struct sequential_integral_range {
+    sequential_integral_range(Integer start, Integer step) : current{start, step} {}
+    sequential_integral_range_helper<Integer> current;
+    sequential_integral_range_helper<Integer> max{ std::numeric_limits<Integer>::max() };
+    sequential_integral_range_helper<Integer> begin() { return current; }
+    sequential_integral_range_helper<Integer> end() { return max; }
+};
+
+template<std::integral Integer1, std::integral Integer2 = bool>
+auto count(Integer1 start = 0, Integer2 step = 1) {
+    return sequential_integral_range<std::common_type_t<Integer1, Integer2>>(start, step);
+}
+}
+}
