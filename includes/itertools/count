@@ -2,36 +2,63 @@
 #include <cstdint>
 #include <limits>
 #include <concepts>
+#include <optional>
 
 namespace util{
 namespace itertools {
+namespace _helper {
 template<std::integral Integer>
 struct sequential_integral_range_helper {
+    using max = std::integral_constant<Integer, std::numeric_limits<Integer>::max()>;
+
     Integer value;
-    Integer step;
-    bool wrapped{true};
-    Integer operator*() { return value; }
-    bool operator!=(const sequential_integral_range_helper& rhs) 
+    const Integer step;
+    bool wrapped{false};
+    constexpr Integer operator*() const { return value; }
+    constexpr bool operator!=(const Integer& rhs)
     {
-        bool result = wrapped && value <= rhs.value;
-        if(std::numeric_limits<Integer>::max() - step < value) wrapped = false;
-        return result;
+        return max::value - step < value ? wrapped = true : !wrapped && value <= rhs;
     }
-    auto operator++() { value += step; return *this; }
+    constexpr void operator++() { value += step; }
+
+    constexpr auto get() const { return *this; }
+};
+}
+
+template<std::integral Integer = std::uintmax_t>
+struct sequential_integral_range : _helper::sequential_integral_range_helper<Integer> {
+    using _helper = _helper::sequential_integral_range_helper<Integer>;
+
+    sequential_integral_range(Integer start, Integer step) : _helper{start, step} {}
+    sequential_integral_range(Integer start, Integer stop, Integer step) : _helper{start, step}, max{stop - 1} {}
+
+    std::optional<Integer> max;
+    constexpr auto begin() { return _helper::get(); }
+    constexpr Integer end() { return max.value_or(_helper::max::value); }
 };
 
-template<std::integral Integer = std::uint64_t>
-struct sequential_integral_range {
-    sequential_integral_range(Integer start, Integer step) : current{start, step} {}
-    sequential_integral_range_helper<Integer> current;
-    sequential_integral_range_helper<Integer> max{ std::numeric_limits<Integer>::max() };
-    sequential_integral_range_helper<Integer> begin() { return current; }
-    sequential_integral_range_helper<Integer> end() { return max; }
-};
+template<
+    std::integral Integer1 = std::uintmax_t, 
+    std::integral Integer2 = bool, 
+    typename Integer = std::common_type_t<Integer1, Integer2>>
+constexpr auto count(Integer1 start = 0, Integer2 step = true) {
+    return sequential_integral_range<Integer>(start, step);
+}
 
-template<std::integral Integer1, std::integral Integer2 = bool>
-auto count(Integer1 start = 0, Integer2 step = 1) {
-    return sequential_integral_range<std::common_type_t<Integer1, Integer2>>(start, step);
+template<std::integral ... Integers>
+constexpr auto range(Integers ... vals)
+{
+    static_assert(sizeof...(vals) >= 1 && sizeof...(vals) <= 3, "itertools::range(...) takes in range(stop) or range(start, stop, step = 1)");
+
+    if constexpr (sizeof...(vals) >= 1)
+    {
+        using _common_type = std::common_type_t<decltype(vals)...>;
+
+        if constexpr (sizeof...(vals) == 1) return sequential_integral_range<_common_type>(0, vals..., true);
+        else if constexpr (sizeof...(vals) == 2) return sequential_integral_range<_common_type>(vals..., true);
+        else if constexpr (sizeof...(vals) == 3) return sequential_integral_range<_common_type>(vals...);
+    }
+    else return count();
 }
 }
 }
